@@ -1,4 +1,5 @@
-import { EthloggerConfig, HecOutputConfig } from './config';
+import { AzureClient } from './azure';
+import { AzureOutputConfig, EthloggerConfig, HecOutputConfig } from './config';
 import { HecClient } from './hec';
 import {
     BlockMessage,
@@ -37,6 +38,58 @@ export interface Output extends ManagedResource {
     write(message: OutputMessage): void;
     flushStats(): Stats;
     waitUntilAvailable?(maxTime: number): Promise<void>;
+}
+
+export class AzureOutput implements Output, ManagedResource {
+    constructor(
+        private eventsAzure: AzureClient,
+        private metricsAzure: AzureClient,
+        private config: AzureOutputConfig
+    ) {}
+
+    public write(msg: OutputMessage) {
+        switch (msg.type) {
+            case 'block':
+            case 'nodeInfo':
+            case 'transaction':
+            case 'event':
+            case 'pendingtx':
+            case 'gethPeer':
+                this.eventsAzure.pushEvent({
+                    time: msg.time,
+                    body: msg.body,
+                    metadata: {
+                        sourcetype: this.config.sourcetypes[msg.type] ?? defaultSourcetypes[msg.type],
+                    },
+                });
+                break;
+            case 'nodeMetrics':
+                // const metricsPrefix = this.config.metricsPrefix ? this.config.metricsPrefix + '.' : '';
+                // this.metricsAzure.pushMetrics({
+                //     time: msg.time,
+                //     measurements: prefixKeys(msg.metrics, metricsPrefix, true),
+                //     metadata: {
+                //         sourcetype: this.config.sourcetypes.nodeMetrics ?? defaultSourcetypes.nodeMetrics,
+                //     },
+                // });
+                break;
+            default:
+                throw new Error(`Unrecognized output message: ${msg}`);
+        }
+    }
+
+    public flushStats() {
+        return {
+            ...prefixKeys(this.eventsAzure.flushStats(), 'eventsAzure.'),
+            ...prefixKeys(this.metricsAzure.flushStats(), 'metricsAzure.'),
+        };
+    }
+
+    public shutdown() {
+        return Promise.all([this.eventsAzure.shutdown(), this.metricsAzure.shutdown()]).then(() => {
+            /* no op */
+        });
+    }
 }
 
 export class HecOutput implements Output, ManagedResource {
@@ -143,6 +196,15 @@ export class DevNullOutput implements Output {
     public async shutdown() {
         // noop
     }
+}
+
+export async function createAzureOutput(config: EthloggerConfig, baseAzureClient: AzureClient): Promise<Output> {
+    if (config.output.type === 'azure') {
+        const eventsAzure = baseAzureClient;
+        const metricsAzure = baseAzureClient;
+        return new AzureOutput(eventsAzure, metricsAzure, config.output);
+    }
+    throw new Error(`Invalid output type: ${((config.output as any) ?? {}).type}`);
 }
 
 export async function createOutput(config: EthloggerConfig, baseHecClient: HecClient): Promise<Output> {

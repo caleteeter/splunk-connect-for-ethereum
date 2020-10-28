@@ -42,7 +42,7 @@ export class HttpTransport implements EthereumTransport {
         this.httpAgent = isHttps(url)
             ? new HttpsAgent({
                   ...baseAgentOptions,
-                  rejectUnauthorized: this.config.validateCertificate,
+                  // rejectUnauthorized: this.config.validateCertificate,
               })
             : new HttpAgent(baseAgentOptions);
     }

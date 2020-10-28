@@ -3,6 +3,7 @@ import debugModule from 'debug';
 import { inspect } from 'util';
 import { ContractInfo, getContractInfo } from './abi/contract';
 import { AbiRepository } from './abi/repo';
+import { AzureClient } from './azure';
 import { BlockWatcher } from './blockwatcher';
 import { Checkpoint } from './checkpoint';
 import { CLI_FLAGS } from './cliflags';
@@ -14,7 +15,7 @@ import { HecClient } from './hec';
 import { introspectTargetNodePlatform } from './introspect';
 import { substituteVariablesInHecConfig } from './meta';
 import { NodeStatsCollector } from './nodestats';
-import { createOutput } from './output';
+import { createAzureOutput } from './output';
 import { ABORT } from './utils/abort';
 import { createModuleDebug, enableTraceLogging } from './utils/debug';
 import LRUCache from './utils/lru';
@@ -62,6 +63,8 @@ class Ethlogger extends Command {
             }
             const config = await loadEthloggerConfig(flags);
 
+            config.output.type = 'azure';
+
             if (flags['debug-contract-info'] != null) {
                 const addr = flags['debug-contract-info'];
                 info(`Determining info for contract at address=%s`, addr);
@@ -82,6 +85,12 @@ class Ethlogger extends Command {
 
                 info('Contract info: %O', contractInfo);
                 return;
+            }
+
+            if (flags['azure-url']) {
+                info(`Azure Event grid enabled at: ${flags['azure-url']}`);
+                config.azure.default.url = flags['azure-url'];
+                config.azure.default.key = flags['azure-key'];
             }
 
             const health = new HealthStateMonitor();
@@ -139,19 +148,22 @@ class Ethlogger extends Command {
             transportOriginHost: transport.originHost,
         });
 
-        const baseHec = new HecClient(config.hec.default);
-        const output = await createOutput(config, baseHec);
+        // const baseHec = new HecClient(config.hec.default);
+        const baseAzure = new AzureClient(config.azure.default);
+        const output = await createAzureOutput(config, baseAzure);
+
+        // const output = await createOutput(config, baseHec);
         addResource(output);
 
-        const internalStatsCollector = new InternalStatsCollector({
-            collect: config.internalMetrics.enabled,
-            collectInterval: config.internalMetrics.collectInterval,
-            dest: baseHec.clone(config.hec.internal),
-            basePrefix: 'ethlogger.internal',
-        });
-        addResource(internalStatsCollector);
-        internalStatsCollector.addSource(transport, 'ethTransport');
-        internalStatsCollector.addSource(output, 'output');
+        // const internalStatsCollector = new InternalStatsCollector({
+        //     collect: config.internalMetrics.enabled,
+        //     collectInterval: config.internalMetrics.collectInterval,
+        //     dest: baseHec.clone(config.hec.internal),
+        //     basePrefix: 'ethlogger.internal',
+        // });
+        // addResource(internalStatsCollector);
+        // internalStatsCollector.addSource(transport, 'ethTransport');
+        // internalStatsCollector.addSource(output, 'output');
 
         const checkpoints = addResource(
             new Checkpoint({
@@ -168,7 +180,7 @@ class Ethlogger extends Command {
         const contractInfoCache = new LRUCache<string, Promise<ContractInfo>>({
             maxSize: config.contractInfo.maxCacheEntries,
         });
-        internalStatsCollector.addSource(contractInfoCache, 'contractInfoCache');
+        // internalStatsCollector.addSource(contractInfoCache, 'contractInfoCache');
 
         const nodeStatsCollector = new NodeStatsCollector({
             ethClient: client,
@@ -180,7 +192,7 @@ class Ethlogger extends Command {
             peerInfo: config.peerInfo,
         });
         addResource(nodeStatsCollector);
-        internalStatsCollector.addSource(nodeStatsCollector, 'nodeStatsCollector');
+        // internalStatsCollector.addSource(nodeStatsCollector, 'nodeStatsCollector');
 
         let blockWatcher: BlockWatcher | null = null;
 
@@ -195,12 +207,12 @@ class Ethlogger extends Command {
                 nodePlatform: platformAdapter,
             });
             addResource(blockWatcher);
-            internalStatsCollector.addSource(blockWatcher, 'blockWatcher');
+            // internalStatsCollector.addSource(blockWatcher, 'blockWatcher');
         } else {
             debug('Block watcher is disabled');
         }
 
-        internalStatsCollector.start();
+        // internalStatsCollector.start();
 
         return Promise.all(
             [blockWatcher?.start(), nodeStatsCollector.start()].map(p =>

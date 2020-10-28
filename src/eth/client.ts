@@ -82,7 +82,7 @@ export class EthereumClient {
                 })
             );
         }
-        await sleep(0);
+        await sleep(2000);
         await executeBatchRequest(batchReqs, this.transport);
         return await Promise.all(promises);
     }

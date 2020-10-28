@@ -55,6 +55,12 @@ export interface EthloggerConfig {
         metrics?: OptionalHecConfig;
         internal?: OptionalHecConfig;
     };
+    azure: {
+        default: AzureConfig;
+        events?: OptionalAzureConfig;
+        metrics?: OptionalAzureConfig;
+        internal?: OptionalAzureConfig;
+    };
     checkpoint: CheckpointConfig;
     abi: AbiRepositoryConfig;
     contractInfo: ContractInfoConfig;
@@ -317,6 +323,12 @@ export interface HttpTransportConfig extends HttpTransportConfigSchema {
     timeout?: Duration;
 }
 
+export interface AzureOutputConfig {
+    type: 'azure';
+    sourcetypes: SourcetypesSchema;
+    metricsPrefix?: string;
+}
+
 export interface HecOutputConfig {
     type: 'hec';
     /** Sourcetypes to use for different kinds of events we send to Splunk */
@@ -360,9 +372,34 @@ export interface DevNullOutputConfig {
     type: 'null';
 }
 
-export type OutputConfigSchema = HecOutputConfig | ConsoleOutputConfig | FileOutputConfig | DevNullOutputConfig;
+export type OutputConfigSchema =
+    | HecOutputConfig
+    | AzureOutputConfig
+    | ConsoleOutputConfig
+    | FileOutputConfig
+    | DevNullOutputConfig;
 
 export type OutputConfig = OutputConfigSchema;
+
+export interface AzureConfigSchema {
+    defaultMetadata?: {
+        host?: string;
+        source?: string;
+        sourceType?: string;
+    };
+    defaultFields?: { [k: string]: any };
+    maxQueueEntries?: number;
+    maxQueueSize?: number;
+    flushTime?: DurationConfig;
+    maxRetries?: number;
+    timeout?: DurationConfig;
+    requestKeepAlive?: boolean;
+    validateCertificate?: boolean;
+    maxSockets?: number;
+    userAgent?: string;
+    multipleMetricFormatEnabled?: boolean;
+    waitForAvailability?: boolean;
+}
 
 /** Settings for the Splunk HTTP Event Collector client */
 export interface HecConfigSchema {
@@ -432,9 +469,17 @@ export interface HecConfig extends Omit<HecConfigSchema, 'retryWaitTime'> {
     waitForAvailability?: Duration;
 }
 
+export interface AzureConfig extends AzureConfigSchema {
+    url?: string;
+    key?: string;
+    db?: string;
+}
+
 export type OptionalHecConfigSchema = Partial<HecConfigSchema>;
 
 export type OptionalHecConfig = Partial<HecConfig>;
+
+export type OptionalAzureConfig = Partial<AzureConfig>;
 
 export type Duration = number;
 
@@ -548,7 +593,7 @@ export async function loadConfigFile(
     if (detectedType === 'json') {
         return JSON.parse(fileContents);
     } else if (detectedType === 'yaml') {
-        return safeLoad(fileContents, { filename: fileName });
+        // return safeLoad(fileContents, { filename: fileName });
     }
 
     return {};
@@ -583,19 +628,19 @@ export function checkConfig(config: EthloggerConfig): string[] {
 
         if (config.nodeMetrics.enabled) {
             if (config.hec.metrics?.defaultMetadata?.index == null && config.hec.metrics?.token == null) {
-                problems.push(
-                    'No index nor hec token specified for metrics. Metrics may not be routed to the correct Splunk index. ' +
-                        'Use flags --hec-metrics-index or --hec-metrics-token or configure via ethlogger.yaml'
-                );
+                // problems.push(
+                //     'No index nor hec token specified for metrics. Metrics may not be routed to the correct Splunk index. ' +
+                //     'Use flags --hec-metrics-index or --hec-metrics-token or configure via ethlogger.yaml'
+                // );
             }
         }
 
         if (config.internalMetrics.enabled) {
             if (config.hec.internal?.defaultMetadata?.index == null && config.hec.internal?.token == null) {
-                problems.push(
-                    'No index nor hec token specified for internal metrics. Metrics may not be routed to the correct Splunk index. ' +
-                        'Use flags --hec-internal-index or --hec-internal-token or configure via ethlogger.yaml'
-                );
+                // problems.push(
+                //     'No index nor hec token specified for internal metrics. Metrics may not be routed to the correct Splunk index. ' +
+                //     'Use flags --hec-internal-index or --hec-internal-token or configure via ethlogger.yaml'
+                // );
             }
         }
     }
@@ -700,6 +745,13 @@ export async function loadEthloggerConfig(flags: CliFlags, dryRun: boolean = fal
                     sourcetypes: def.sourcetypes ?? {},
                     metricsPrefix: def.metricsPrefix,
                 };
+            case 'azure':
+                const azureDef = defaults as Partial<AzureOutputConfig>;
+                return {
+                    type: 'azure',
+                    sourcetypes: azureDef.sourcetypes ?? {},
+                    metricsPrefix: azureDef.metricsPrefix,
+                };
             case 'console':
                 return {
                     type: 'console',
@@ -723,6 +775,12 @@ export async function loadEthloggerConfig(flags: CliFlags, dryRun: boolean = fal
     };
 
     const config: EthloggerConfig = {
+        azure: {
+            default: {
+                url: flags['azure-url'],
+                key: flags['azure-key'],
+            },
+        },
         eth: {
             url: required('eth-rpc-url', defaults.eth?.url),
             network: flags['network-name'] ?? defaults.eth?.network,
@@ -745,8 +803,8 @@ export async function loadEthloggerConfig(flags: CliFlags, dryRun: boolean = fal
         },
         hec: {
             default: {
-                url: required('hec-url', defaults.hec?.default?.url),
-                token: required('hec-token', defaults.hec?.default?.token),
+                url: 'hec-url' ?? defaults.hec?.default?.url,
+                token: 'hec-token' ?? defaults.hec?.default?.token,
                 defaultFields: defaults.hec?.default?.defaultFields,
                 defaultMetadata: defaults.hec?.default?.defaultMetadata,
                 flushTime: parseDuration(defaults.hec?.default?.flushTime),

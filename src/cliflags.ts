@@ -31,6 +31,16 @@ export const CLI_FLAGS = {
             'called ethlogger.yaml or ethlogger.json in the current working directory',
     }),
 
+    'azure-url': flags.string({
+        env: 'AZURE_URL',
+        description: 'URL to connect to Azure Event Grid Topic.',
+    }),
+
+    'azure-key': flags.string({
+        env: 'AZURE_KEY',
+        description: 'API key to authenticate to the Azure Event Grid',
+    }),
+
     'collect-blocks': flags.boolean({
         allowNo: true,
         env: 'COLLECT_BLOCKS',

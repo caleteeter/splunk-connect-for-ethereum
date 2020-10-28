@@ -11,7 +11,7 @@ export function prefixKeys<T extends { [k: string]: any }>(obj: T, prefix?: stri
     const entries = Object.entries(obj);
     return Object.fromEntries(
         (removeEmtpy ? entries.filter(([, v]) => v != null) : entries).map(([k, v]) => [prefix + k, v])
-    );
+    ) as T;
 }
 
 /**

@@ -1,6 +1,6 @@
 eth:
     http:
-        timeout: 1m
+        timeout: 2m
         validateCertificate: true
         requestKeepAlive: true
         maxSockets: 256
@@ -76,7 +76,7 @@ blockWatcher:
     decryptPrivateTransactions: false
     retryWaitTime:
         type: linear-backoff
-        min: 0
+        min: 10s
         step: 2.5s
         max: 2m
 nodeMetrics:

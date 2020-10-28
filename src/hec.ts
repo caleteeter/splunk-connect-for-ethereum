@@ -208,7 +208,7 @@ export class HecClient {
         this.httpAgent = isHttps(this.config.url)
             ? new HttpsAgent({
                   ...agentOptions,
-                  rejectUnauthorized: this.config.validateCertificate,
+                  // rejectUnauthorized: this.config.validateCertificate,
               })
             : new HttpAgent(agentOptions);
     }
